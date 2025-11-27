@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<resources>
+    <!-- Tron-style dark theme colors -->
+    <color name="background_dark">#0A0A0A</color>
+    <color name="surface_dark">#121212</color>
+    <color name="primary_color">#008800</color>
+    <color name="primary_dark">#008800</color>
+    <color name="secondary_color">#009999</color>
+    <color name="accent_color">#b100b1</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#CCCCCC</color>
+    <color name="text_black">#000000</color>
+    <color name="success_color">#00FF00</color>
+    <color name="error_color">#FF0000</color>
+    <color name="warning_color">#FFFF00</color>
+    <color name="info_color">#00FFFF</color>
+    <color name="button_background">#222222</color>
+    <color name="card_background">#1E1E1E</color>
+    <color name="divider_color">#333333</color>
+    <color name="status_success">#008800</color>
+    <color name="status_error">#880000</color>
+    <color name="status_warning">#888800</color>
+    <color name="status_info">#008888</color>
+</resources>
