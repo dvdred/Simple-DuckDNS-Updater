@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Sfondo gradient scuro -->
+    <path
+        android:fillColor="#0A0E27"
+        android:pathData="M0,0 L108,0 L108,108 L0,108 Z" />
+
+    <!-- Glow esterno corpo -->
+    <path
+        android:fillColor="#00D9FF"
+        android:fillAlpha="0.15"
+        android:pathData="M36,65 Q32,56 42,50 Q54,43 70,48 Q82,52 80,65 Q76,78 54,78 Q36,78 36,65 Z" />
+
+    <!-- Corpo principale - fill scuro (più piccolo) -->
+    <path
+        android:fillColor="#0D1B2E"
+        android:pathData="M38,65 Q34,58 44,51 Q54,45 68,49 Q80,53 78,65 Q74,76 54,76 Q38,76 38,65 Z" />
+
+    <!-- Contorno corpo - neon cyan -->
+    <path
+        android:strokeColor="#00D9FF"
+        android:strokeWidth="2.5"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M38,65 Q34,58 44,51 Q54,45 68,49 Q80,53 78,65 Q74,76 54,76 Q38,76 38,65 Z" />
+
+    <!-- Glow testa -->
+    <path
+        android:fillColor="#00D9FF"
+        android:fillAlpha="0.2"
+        android:pathData="M68,51 Q86,36 79,26 Q70,18 58,28 Q52,38 68,51 Z" />
+
+    <!-- Testa - fill -->
+    <path
+        android:fillColor="#0D1B2E"
+        android:pathData="M68,49 Q84,36 78,27 Q70,20 60,30 Q54,38 68,49 Z" />
+
+    <!-- Contorno testa -->
+    <path
+        android:strokeColor="#00D9FF"
+        android:strokeWidth="2.5"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M68,49 Q84,36 78,27 Q70,20 60,30 Q54,38 68,49 Z" />
+
+    <!-- Becco geometrico -->
+    <path
+        android:fillColor="#FF3D00"
+        android:pathData="M78,30 L95,32 L93,36 L78,35 Z" />
+    
+    <path
+        android:strokeColor="#FF6E40"
+        android:strokeWidth="1.5"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M78,30 L95,32 L93,36 L78,35 Z" />
+
+    <!-- Occhio - glow intenso -->
+    <path
+        android:fillColor="#00FFFF"
+        android:fillAlpha="0.6"
+        android:pathData="M72,33 A5,5 0 1,1 72,33.01 Z" />
+    
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M72,33 A2.5,2.5 0 1,1 72,33.01 Z" />
+
+    <!-- ALA SINISTRA - PIÙ GRANDE -->
+    <!-- Glow ala -->
+    <path
+        android:fillColor="#00D9FF"
+        android:fillAlpha="0.15"
+        android:pathData="M38,58 Q28,54 22,58 Q18,62 20,68 Q24,74 34,72 Q42,68 38,58 Z" />
+    
+    <!-- Ala fill -->
+    <path
+        android:fillColor="#0D1B2E"
+        android:pathData="M38,58 Q30,55 24,59 Q20,63 22,68 Q26,73 34,71 Q40,68 38,58 Z" />
+    
+    <!-- Contorno ala -->
+    <path
+        android:strokeColor="#00D9FF"
+        android:strokeWidth="2.5"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M38,58 Q30,55 24,59 Q20,63 22,68 Q26,73 34,71 Q40,68 38,58 Z" />
+
+    <!-- Dettagli ala sinistra - circuiti -->
+    <path
+        android:strokeColor="#00D9FF"
+        android:strokeWidth="1.2"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M32,60 L28,62 M30,65 L26,66 M32,68 L28,69" />
+
+    <!-- Nodi ala sinistra -->
+    <path
+        android:fillColor="#00FFFF"
+        android:pathData="M28,62 A1.2,1.2 0 1,1 28,62.01 Z" />
+    <path
+        android:fillColor="#00FFFF"
+        android:pathData="M26,66 A1.2,1.2 0 1,1 26,66.01 Z" />
+
+    <!-- ALA DESTRA - PIÙ GRANDE -->
+    <!-- Glow ala -->
+    <path
+        android:fillColor="#00D9FF"
+        android:fillAlpha="0.15"
+        android:pathData="M64,56 Q74,52 80,56 Q84,60 82,66 Q78,72 68,70 Q62,66 64,56 Z" />
+    
+    <!-- Ala fill -->
+    <path
+        android:fillColor="#0D1B2E"
+        android:pathData="M64,56 Q72,53 78,57 Q82,61 80,66 Q76,71 68,69 Q64,66 64,56 Z" />
+    
+    <!-- Contorno ala -->
+    <path
+        android:strokeColor="#00D9FF"
+        android:strokeWidth="2.5"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M64,56 Q72,53 78,57 Q82,61 80,66 Q76,71 68,69 Q64,66 64,56 Z" />
+
+    <!-- Dettagli ala destra - circuiti -->
+    <path
+        android:strokeColor="#00D9FF"
+        android:strokeWidth="1.2"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M70,58 L74,60 M72,63 L76,64 M70,67 L74,68" />
+
+    <!-- Nodi ala destra -->
+    <path
+        android:fillColor="#00FFFF"
+        android:pathData="M74,60 A1.2,1.2 0 1,1 74,60.01 Z" />
+    <path
+        android:fillColor="#00FFFF"
+        android:pathData="M76,64 A1.2,1.2 0 1,1 76,64.01 Z" />
+
+    <!-- Circuiti corpo - linea 1 -->
+    <path
+        android:strokeColor="#00D9FF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M42,62 L48,61 L54,63 L60,62 L66,63" />
+
+    <!-- Nodi circuito -->
+    <path
+        android:fillColor="#00FFFF"
+        android:pathData="M48,61 A1.5,1.5 0 1,1 48,61.01 Z" />
+    <path
+        android:fillColor="#00FFFF"
+        android:pathData="M60,62 A1.5,1.5 0 1,1 60,62.01 Z" />
+
+    <!-- Circuiti corpo - linea 2 -->
+    <path
+        android:strokeColor="#FF3D00"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M44,68 L50,67 L56,69 L62,68" />
+
+    <!-- Nodi arancioni -->
+    <path
+        android:fillColor="#FF6E40"
+        android:pathData="M50,67 A1.2,1.2 0 1,1 50,67.01 Z" />
+    <path
+        android:fillColor="#FF6E40"
+        android:pathData="M62,68 A1.2,1.2 0 1,1 62,68.01 Z" />
+
+    <!-- ZAMPE - PIÙ IN BASSO -->
+    <!-- Zampa sinistra -->
+    <path
+        android:strokeColor="#FF3D00"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M46,76 L46,86" />
+    
+    <!-- Piede sinistro -->
+    <path
+        android:strokeColor="#FF3D00"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M42,86 L46,86 L50,86" />
+    
+    <path
+        android:fillColor="#FF6E40"
+        android:pathData="M46,86 A1.5,1.5 0 1,1 46,86.01 Z" />
+
+    <!-- Zampa destra -->
+    <path
+        android:strokeColor="#FF3D00"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M58,76 L58,86" />
+    
+    <!-- Piede destro -->
+    <path
+        android:strokeColor="#FF3D00"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M54,86 L58,86 L62,86" />
+    
+    <path
+        android:fillColor="#FF6E40"
+        android:pathData="M58,86 A1.5,1.5 0 1,1 58,86.01 Z" />
+
+    <!-- Coda geometrica -->
+    <path
+        android:fillColor="#0D1B2E"
+        android:strokeColor="#FF3D00"
+        android:strokeWidth="2"
+        android:pathData="M38,63 L26,58 L24,64 L20,68 L28,72 L36,70 Z" />
+
+    <!-- Dettagli coda -->
+    <path
+        android:strokeColor="#FF6E40"
+        android:strokeWidth="1"
+        android:fillColor="@android:color/transparent"
+        android:pathData="M32,61 L26,60 M30,68 L24,68" />
+
+    <!-- Riflesso base - glow -->
+    <path
+        android:fillColor="#00D9FF"
+        android:fillAlpha="0.25"
+        android:pathData="M42,88 Q54,92 66,88 L64,94 Q54,96 42,94 Z" />
+
+    <!-- Particelle ambientali -->
+    <path
+        android:fillColor="#00FFFF"
+        android:fillAlpha="0.8"
+        android:pathData="M20,30 A1,1 0 1,1 20,30.01 Z" />
+    <path
+        android:fillColor="#00FFFF"
+        android:fillAlpha="0.6"
+        android:pathData="M88,20 A1.5,1.5 0 1,1 88,20.01 Z" />
+    <path
+        android:fillColor="#FF6E40"
+        android:fillAlpha="0.7"
+        android:pathData="M92,58 A1,1 0 1,1 92,58.01 Z" />
+    <path
+        android:fillColor="#00FFFF"
+        android:fillAlpha="0.5"
+        android:pathData="M28,96 A1,1 0 1,1 28,96.01 Z" />
+
+</vector>
