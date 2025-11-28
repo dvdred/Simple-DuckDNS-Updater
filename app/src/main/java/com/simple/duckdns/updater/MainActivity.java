@@ -25,6 +25,8 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -50,6 +52,7 @@ public class MainActivity extends Activity {
     private LinearLayout configurationHeader;
     private TextView configurationToggleIcon;
     private LinearLayout configurationFieldsContainer;
+    private TextView versionTextView;
     private boolean isConfigurationExpanded = true;
 
     private static final String LOG_FILE = "duckdns_log.txt";
@@ -93,6 +96,7 @@ public class MainActivity extends Activity {
         configurationFieldsContainer = findViewById(
             R.id.configurationFieldsContainer
         );
+        versionTextView = findViewById(R.id.versionTextView);
 
         // Initialize executor service for background tasks
         executorService = Executors.newFixedThreadPool(2);
@@ -177,6 +181,9 @@ public class MainActivity extends Activity {
 
         // Load log on startup
         loadLog();
+
+        // Display footer information
+        displayFooterInfo();
     }
 
     private boolean loadConfigFromFile() {
@@ -649,8 +656,34 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (executorService != null && !executorService.isShutdown()) {
+        if (executorService != null) {
             executorService.shutdown();
+        }
+    }
+
+    private String getVersionFromAssets() {
+        try {
+            InputStream inputStream = getAssets().open("version.txt");
+            BufferedReader reader = new BufferedReader(
+                new InputStreamReader(inputStream)
+            );
+            String version = reader.readLine();
+            reader.close();
+            inputStream.close();
+            return version != null ? version : "Unknown";
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "Unknown";
+        }
+    }
+
+    private void displayFooterInfo() {
+        // Get version from assets
+        String version = getVersionFromAssets();
+
+        // Set version text
+        if (versionTextView != null) {
+            versionTextView.setText("Version: " + version);
         }
     }
 }
