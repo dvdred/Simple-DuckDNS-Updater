@@ -43,7 +43,7 @@ The app requires minimal permissions:
 If you discover a security issue, please report it responsibly:
 
 ### For Critical Issues (RCE, arbitrary code execution, etc.)
-📧 **Email:** dvdred@gmail.com  
+📧 **Email:** dvd.red@gmail.com  
 ⏱️ **Response time:** Within 48 hours  
 🔒 **Please include:**
 - Description of the vulnerability

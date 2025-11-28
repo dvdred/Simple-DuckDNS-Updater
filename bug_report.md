@@ -10,8 +10,8 @@ assignees: ''
 A clear and concise description of what the bug is.
 
 ## Steps to Reproduce
-1. Go to '...'
-2. Click on '...'
+1. Go to '. ..'
+2. Click on '. ..'
 3. See error
 
 ## Expected Behavior
@@ -24,16 +24,15 @@ What actually happened.
 If applicable, add screenshots to help explain your problem.
 
 ## System Information
-- **OS**: [e.g. Windows 11, Ubuntu 22.04, macOS 13]
-- **Python Version**: [e.g. 3.11.5]
-- **Pygame Version**: [e.g. 2.5.0]
-- **Game Version**: [e.g. v1.0.0]
+- **Android Version**: [e.g. Android 11, Android 12]
+- **Device Model**: [e.g. Pixel 6, Samsung Galaxy S21]
+- **App Version**: [e.g. v1.0.0, v1.1.0]
+- **Build Number**: [e.g. 1, 2]
 
 ## Additional Context
 Add any other context about the problem here.
 
 ## Logs/Error Messages
-
 Paste any error messages or logs here
 
 ## Checklist
