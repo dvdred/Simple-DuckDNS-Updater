@@ -1,12 +1,12 @@
 # Simple-DuckDNS-Updater Android App
 
-![Logo](https://github.com/dvdred/antipattern-bird/raw/refs/heads/main/SimpleDuckDNS-Updater.png)
+![Logo](https://github.com/dvdred/Simple-DuckDNS-Updater/raw/refs/heads/main/SimpleDuckDNS-Updater.png)
 
 This Android application allows you to update your DuckDNS domain records programmatically
 
-![Configuration](https://github.com/dvdred/antipattern-bird/raw/refs/heads/main/demo01.png)
-![ManualUpdate](https://github.com/dvdred/antipattern-bird/raw/refs/heads/main/demo02.png)
-![AutoUpdate](https://github.com/dvdred/antipattern-bird/raw/refs/heads/main/demo03.png)
+![Configuration](https://github.com/dvdred/Simple-DuckDNS-Updater/raw/refs/heads/main/demo01.png)
+![ManualUpdate](https://github.com/dvdred/Simple-DuckDNS-Updater/raw/refs/heads/main/demo02.png)
+![AutoUpdate](https://github.com/dvdred/Simple-DuckDNS-Updater/raw/refs/heads/main/demo03.png)
 
 ---
 
