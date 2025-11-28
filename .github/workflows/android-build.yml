@@ -4,13 +4,18 @@ on:
   push:
     tags:
       - "v[0-9]+.*"
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 👈 Necessario per accedere alla history dei commit
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -49,3 +54,28 @@ jobs:
         with:
           name: app-release
           path: app/build/outputs/apk/release/*.apk
+
+      - name: Get commit message
+        id: commit
+        run: |
+          # Prende il messaggio del commit associato al tag
+          MESSAGE=$(git tag -l --format='%(contents)' ${{ github.ref_name }})
+          
+          # Se il tag non ha un messaggio, usa il commit message
+          if [ -z "$MESSAGE" ]; then
+            MESSAGE=$(git log -1 --format=%B)
+          fi
+          
+          # Salva in output (gestisce messaggi multilinea)
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$MESSAGE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "🦆 Simple DuckDNS Updater ${{ github.ref_name }}"
+          body: ${{ steps.commit.outputs.message }}
+          files: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release.apk
