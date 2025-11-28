@@ -59,7 +59,7 @@ Examples of representing our community include:
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the project maintainer at **dvdred@gmail.com**.
+reported to the project maintainer at **dvd.red@gmail.com**.
 
 All complaints will be reviewed and investigated promptly and fairly.
 
@@ -148,7 +148,7 @@ This is an Android application project for updating DuckDNS records. We value:
 If you have questions about this Code of Conduct, please:
 
 1. Open an issue with the `question` label
-2. Email the maintainer at dvdred@gmail.com
+2. Email the maintainer at dvd.red@gmail.com
 3. Start a discussion in GitHub Discussions
 
 ---

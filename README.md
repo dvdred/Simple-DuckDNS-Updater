@@ -1,6 +1,6 @@
 # Simple-DuckDNS-Updater Android App
 
-This Android application allows you to update your DuckDNS domain records programmatically, similar to the shell script approach described in your instructions.
+This Android application allows you to update your DuckDNS domain records programmatically
 
 ## Features
 
@@ -56,10 +56,10 @@ To build this application:
 ## GitHub Actions
 
 This project includes a GitHub Actions workflow that automatically builds APKs:
-- **Debug APK**: Built on every push to main branch
-- **Release APK**: Built on every push to main branch
+- **Debug APK**:
+- **Release APK**:
 
-The APKs are automatically uploaded as build artifacts.
+The APKs are automatically uploaded as build artifacts to Releases.
 
 ## Project Structure
 
@@ -85,23 +85,23 @@ This implementation now includes:
 - Actual HTTP requests to the DuckDNS API using OkHttp
 - Detailed logging of HTTP status codes (200 OK, 400 Bad Request, etc.)
 - Comprehensive error handling for network issues and invalid responses
-- Improved feedback to the user about the success or failure of updates
+- Improved feedback to the user about the success or failure of updates (OK/KO)
 - Configuration persistence across app restarts
 - Support for automatic IP address detection
 - Clean UI with collapsible configuration section
 
-For further enhancements in a production environment, you could:
+Possible TODOs:
 - Implement more robust error recovery mechanisms
 - Add retry logic for failed requests
 - Consider using WorkManager for better background execution handling
-- Add user authentication
+- Obfuscate sensitive data (API Token, IP addresses) in settings
 - Implement more detailed logging and monitoring
 - Add support for multiple DuckDNS accounts
 - Implement push notifications for update results
 
 ## Author
 
-This project was developed by **dvd.red@gmail.com**, a passionate FOSS enthusiast who has transitioned from sysadmin and devops roles into programming.
+This project was developed by **dvd.red@gmail.com**, a passionate FOSS enthusiast who has transitioned from sysadmin and devops roles into programming hobbyist.
 
 ## License
 

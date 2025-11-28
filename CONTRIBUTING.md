@@ -251,7 +251,7 @@ When adding features requiring resources:
 ## Questions?
 
 - Open an issue with the **question** label
-- Contact: dvdred@gmail.com
+- Contact: dvd.red@gmail.com
 
 ## License
 
