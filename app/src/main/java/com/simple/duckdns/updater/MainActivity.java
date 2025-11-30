@@ -10,6 +10,7 @@ import android.content.IntentFilter;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -18,6 +19,9 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.snackbar.Snackbar;
 import java.io.BufferedReader;
@@ -34,6 +38,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -195,14 +200,16 @@ public class MainActivity extends Activity {
             }
 
             StringBuilder content = new StringBuilder();
-            BufferedReader reader = new BufferedReader(
-                new FileReader(configFile)
-            );
-            String line;
-            while ((line = reader.readLine()) != null) {
-                content.append(line).append("\n");
+            try (
+                BufferedReader reader = new BufferedReader(
+                    new FileReader(configFile)
+                )
+            ) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    content.append(line).append("\n");
+                }
             }
-            reader.close();
 
             String configContent = content.toString();
 
@@ -406,13 +413,13 @@ public class MainActivity extends Activity {
         try {
             String interval = intervalEditText.getText().toString().trim();
             File configFile = new File(getFilesDir(), CONFIG_FILE);
-            FileWriter writer = new FileWriter(configFile);
-            writer.write("domains=" + domains + "\n");
-            writer.write("token=" + token + "\n");
-            writer.write("ip=" + ip + "\n");
-            writer.write("interval=" + interval + "\n");
-            writer.flush();
-            writer.close();
+            try (FileWriter writer = new FileWriter(configFile)) {
+                writer.write("domains=" + domains + "\n");
+                writer.write("token=" + token + "\n");
+                writer.write("ip=" + ip + "\n");
+                writer.write("interval=" + interval + "\n");
+                writer.flush();
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -421,10 +428,10 @@ public class MainActivity extends Activity {
     private synchronized void writeLogSync(String message) {
         try {
             File logFile = new File(getFilesDir(), LOG_FILE);
-            FileWriter writer = new FileWriter(logFile, true);
-            writer.write(message + "\n");
-            writer.flush();
-            writer.close();
+            try (FileWriter writer = new FileWriter(logFile, true)) {
+                writer.write(message + "\n");
+                writer.flush();
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -434,15 +441,17 @@ public class MainActivity extends Activity {
         try {
             File logFile = new File(getFilesDir(), LOG_FILE);
             if (logFile.exists()) {
-                BufferedReader reader = new BufferedReader(
-                    new FileReader(logFile)
-                );
                 List<String> lines = new ArrayList<>();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    lines.add(line);
+                try (
+                    BufferedReader reader = new BufferedReader(
+                        new FileReader(logFile)
+                    )
+                ) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        lines.add(line);
+                    }
                 }
-                reader.close();
 
                 // Show only the last 100 lines
                 StringBuilder content = new StringBuilder();
@@ -520,33 +529,25 @@ public class MainActivity extends Activity {
                 return;
             }
 
-            Intent intent = new Intent(this, UpdateReceiver.class);
-            PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                this,
-                0,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-            );
+            // Save configuration before scheduling
+            String domainsStr = domainsEditText.getText().toString().trim();
+            String tokenStr = tokenEditText.getText().toString().trim();
+            String ipStr = ipEditText.getText().toString().trim();
+            saveConfigToFile(domainsStr, tokenStr, ipStr);
 
-            AlarmManager alarmManager = (AlarmManager) getSystemService(
-                Context.ALARM_SERVICE
-            );
-            long intervalMillis = interval * 60 * 1000L;
+            // Start periodic work using self-rescheduling OneTimeWorkRequest
+            // This allows intervals less than 15 minutes
+            DuckDNSUpdateWorker.startPeriodicWork(this, interval);
 
-            // Start first update after 10 seconds, then repeat at the specified interval
-            long firstUpdateTime = System.currentTimeMillis() + 10000;
-
-            alarmManager.setRepeating(
-                AlarmManager.RTC_WAKEUP,
-                firstUpdateTime,
-                intervalMillis,
-                pendingIntent
+            Log.d(
+                "MainActivity",
+                "Successfully scheduled periodic work with interval: " +
+                    interval +
+                    " minutes"
             );
 
             showSnackbar(
-                "Scheduled update every " +
-                    interval +
-                    " minutes (first in 10s)",
+                "Scheduled update every " + interval + " minutes",
                 "success"
             );
 
@@ -554,26 +555,18 @@ public class MainActivity extends Activity {
             scheduleToggleButton.setText("Stop AutoUpdate");
             scheduleToggleButton.setBackgroundColor(android.graphics.Color.RED);
         } catch (NumberFormatException e) {
+            Log.e("MainActivity", "Invalid interval number format", e);
             showSnackbar("Invalid interval", "error");
         } catch (Exception e) {
+            Log.e("MainActivity", "Error scheduling update", e);
             e.printStackTrace();
             showSnackbar("Error scheduling update: " + e.getMessage(), "error");
         }
     }
 
     private void stopSchedule() {
-        Intent intent = new Intent(this, UpdateReceiver.class);
-        PendingIntent pendingIntent = PendingIntent.getBroadcast(
-            this,
-            0,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-
-        AlarmManager alarmManager = (AlarmManager) getSystemService(
-            Context.ALARM_SERVICE
-        );
-        alarmManager.cancel(pendingIntent);
+        // Stop periodic work using static method
+        DuckDNSUpdateWorker.stopPeriodicWork(this);
 
         showSnackbar("AutoUpdate stopped", "info");
 

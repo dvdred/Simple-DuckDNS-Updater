@@ -13,16 +13,17 @@ This Android application allows you to update your DuckDNS domain records progra
 ## Features
 
 - Manual update of DuckDNS records
-- Scheduled updates with customizable intervals
+- Scheduled updates with customizable intervals (from 1 minute to unlimited)
 - Input fields for domains, token, and optional IP address
 - Logging of all update activities with HTTP response details
-- Background execution for scheduled updates
+- Background execution for scheduled updates using WorkManager
 - Automatic APK building via GitHub Actions
 - Improved error handling for HTTP requests
 - Configuration persistence across app restarts
 - Auto-detection of public IP address when no IP is specified
 - Responsive UI with collapsible configuration section
 - Real-time log viewing and clearing functionality
+- Survives app restarts and device reboots
 
 ## How to Use
 
@@ -33,25 +34,37 @@ This Android application allows you to update your DuckDNS domain records progra
 4. Tap "Update Now" to perform an immediate update
 
 ### Scheduled Updates
-1. Set the interval in minutes for how often updates should occur
+1. Set the interval in minutes for how often updates should occur (minimum 1 minute)
 2. Tap "Start AutoUpdate" to start the scheduled updates
 3. Tap "Stop AutoUpdate" to cancel the scheduled updates
+
+> **Note**: Unlike standard WorkManager periodic tasks (which have a 15-minute minimum), this app supports intervals as low as 1 minute using a self-rescheduling OneTimeWorkRequest pattern.
 
 ## Implementation Details
 
 The app works by:
 1. Constructing a URL in the format: `https://www.duckdns.org/update?domains={domains}&token={token}&ip={ip}`
-2. Performing real HTTP requests to the DuckDNS API using OkHttp
+2. Performing real HTTP requests to the DuckDNS API using OkHttp (singleton client with connection pooling)
 3. Logging all activities to a local file including HTTP status codes and response bodies
-4. Using Android's AlarmManager for scheduled execution
+4. Using Android's WorkManager with self-rescheduling OneTimeWorkRequest for flexible intervals
 5. Storing configuration in internal storage for persistence
 6. Supporting both manual and automatic update modes
 
+### WorkManager Implementation
+
+This app uses a custom implementation to support intervals under 15 minutes:
+
+- **Self-rescheduling pattern**: Each worker execution schedules the next one upon completion
+- **Flexible intervals**: Supports any interval from 1 minute to unlimited
+- **Battery efficient**: Workers are released between executions (no Thread.sleep())
+- **Survives restarts**: WorkManager automatically persists and restores the work chain
+- **Robust error handling**: Reschedules even on failure to ensure continuous operation
+
 ## Permissions Required
 
-- Internet access (for making HTTP requests)
-- Wake lock (to ensure updates happen even when screen is off)
-- Receive boot completed (to restart scheduled updates after reboot)
+- `INTERNET` - For making HTTP requests to DuckDNS API
+- `WAKE_LOCK` - To ensure updates happen even when screen is off
+- `RECEIVE_BOOT_COMPLETED` - To restart scheduled updates after device reboot
 
 ## Building the App
 
@@ -59,33 +72,53 @@ To build this application:
 1. Ensure you have Android Studio installed
 2. Import the project into Android Studio
 3. Build and run the application
-4. The app will automatically include the required OkHttp dependency for HTTP requests
+4. The app will automatically include the required dependencies
 
 ## GitHub Actions
 
 This project includes a GitHub Actions workflow that automatically builds APKs:
-- **Debug APK**:
-- **Release APK**:
+- **Debug APK**: Built on every push
+- **Release APK**: Built for releases
 
 The APKs are automatically uploaded as build artifacts to Releases.
 
 ## Project Structure
 
-- `MainActivity.java`: Main UI activity with configuration inputs and update controls
-- `UpdateReceiver.java`: Broadcast receiver for scheduled updates
-- `DuckDNSApplication.java`: Application-level initialization
-- `AndroidManifest.xml`: App permissions and component declarations
-- `build.gradle`: Gradle build configuration with OkHttp dependency
+```
+app/src/main/java/com/simple/duckdns/updater/
+├── MainActivity.java          # Main UI activity with configuration and controls
+├── DuckDNSUpdateWorker.java   # WorkManager worker for background updates
+├── DuckDNSApplication.java    # Application-level initialization
+└── UpdateReceiver.java        # Legacy broadcast receiver (deprecated)
+```
 
 ## Technical Details
 
 The application uses:
-- **OkHttp** for making HTTP requests to the DuckDNS API
-- **AlarmManager** for scheduling periodic updates
-- **SharedPreferences** for configuration storage
-- **BroadcastReceiver** for handling scheduled update triggers
-- **Background threads** for network operations to prevent UI blocking
-- **Local file logging** for tracking update history
+- **OkHttp** - HTTP client with singleton pattern and configured timeouts (15s connect/read/write)
+- **WorkManager** - Background task scheduling with self-rescheduling for flexible intervals
+- **Internal Storage** - Configuration and log persistence
+- **Try-with-resources** - Proper resource management to prevent memory leaks
+- **Security best practices** - Token never logged, sanitized URL logging
+
+### Security Features
+
+- Token is never exposed in logs (masked as `token=***`)
+- Secure storage of configuration in app's internal storage
+- No sensitive data in crash reports
+
+### Performance Optimizations
+
+- Singleton OkHttpClient with connection pooling
+- Configurable HTTP timeouts (15 seconds)
+- Efficient resource management with try-with-resources
+- No memory leaks from unclosed streams
+
+## Compatibility
+
+- **Minimum SDK**: 21 (Android 5.0 Lollipop)
+- **Target SDK**: 33 (Android 13)
+- **Tested on**: Android 5.0 - Android 14
 
 ## Note
 
@@ -97,15 +130,24 @@ This implementation now includes:
 - Configuration persistence across app restarts
 - Support for automatic IP address detection
 - Clean UI with collapsible configuration section
+- Flexible update intervals (1 minute minimum)
+- Production-ready code with proper resource management
 
-Possible TODOs:
-- Implement more robust error recovery mechanisms
-- Add retry logic for failed requests
-- Consider using WorkManager for better background execution handling
-- Obfuscate sensitive data (API Token, IP addresses) in settings
-- Implement more detailed logging and monitoring
-- Add support for multiple DuckDNS accounts
-- Implement push notifications for update results
+## Possible Future Enhancements
+
+- [ ] Implement exponential backoff for failed requests
+- [ ] Add network constraints (WiFi only option)
+- [ ] Add battery constraints (skip updates when battery is low)
+- [ ] Implement adaptive intervals based on IP change detection
+- [ ] Add support for multiple DuckDNS accounts
+- [ ] Implement push notifications for update results
+- [ ] Add widget for quick status view
+- [ ] Export/import configuration
+
+## Documentation
+
+- [WorkManager Implementation Details](WORKMANAGER_IMPLEMENTATION.md) - Technical details about the self-rescheduling pattern
+- [Changelog](CHANGELOG.md) - Version history and changes
 
 ## Author
 
