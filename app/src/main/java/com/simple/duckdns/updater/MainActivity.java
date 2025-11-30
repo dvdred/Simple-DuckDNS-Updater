@@ -7,9 +7,13 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import android.util.Base64;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -31,6 +35,8 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.security.KeyStore;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -39,6 +45,10 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -193,65 +203,53 @@ public class MainActivity extends Activity {
 
     private boolean loadConfigFromFile() {
         try {
-            File configFile = new File(getFilesDir(), CONFIG_FILE);
+            // Load from encrypted SharedPreferences
+            SharedPreferences prefs = getSharedPreferences(
+                "config",
+                Context.MODE_PRIVATE
+            );
 
-            if (!configFile.exists()) {
-                return false;
-            }
+            String domains = prefs.getString("domains", "");
+            String token = prefs.getString("token", "");
+            String ip = prefs.getString("ip", "");
+            String interval = prefs.getString("interval", "");
 
-            StringBuilder content = new StringBuilder();
-            try (
-                BufferedReader reader = new BufferedReader(
-                    new FileReader(configFile)
-                )
-            ) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    content.append(line).append("\n");
+            // Check if we need to migrate from old config file
+            if (domains.isEmpty() && token.isEmpty()) {
+                boolean migrated = migrateFromOldConfigFile();
+                if (migrated) {
+                    // Reload from SharedPreferences after migration
+                    domains = prefs.getString("domains", "");
+                    token = prefs.getString("token", "");
+                    ip = prefs.getString("ip", "");
+                    interval = prefs.getString("interval", "");
                 }
             }
 
-            String configContent = content.toString();
-
-            String domains = "";
-            String token = "";
-            String ip = "";
-            String interval = "";
-
-            // Extract domains
-            int domainsIndex = configContent.indexOf("domains=");
-            if (domainsIndex != -1) {
-                int startIndex = domainsIndex + "domains=".length();
-                int endIndex = configContent.indexOf("\n", startIndex);
-                if (endIndex == -1) endIndex = configContent.length();
-                domains = configContent.substring(startIndex, endIndex).trim();
-            }
-
-            // Extract token
-            int tokenIndex = configContent.indexOf("token=");
-            if (tokenIndex != -1) {
-                int startIndex = tokenIndex + "token=".length();
-                int endIndex = configContent.indexOf("\n", startIndex);
-                if (endIndex == -1) endIndex = configContent.length();
-                token = configContent.substring(startIndex, endIndex).trim();
-            }
-
-            // Extract ip
-            int ipIndex = configContent.indexOf("ip=");
-            if (ipIndex != -1) {
-                int startIndex = ipIndex + "ip=".length();
-                int endIndex = configContent.indexOf("\n", startIndex);
-                if (endIndex == -1) endIndex = configContent.length();
-                ip = configContent.substring(startIndex, endIndex).trim();
-            }
-
-            // Extract interval
-            int intervalIndex = configContent.indexOf("interval=");
-            if (intervalIndex != -1) {
-                int startIndex = intervalIndex + "interval=".length();
-                int endIndex = configContent.indexOf("\n", startIndex);
-                if (endIndex == -1) endIndex = configContent.length();
-                interval = configContent.substring(startIndex, endIndex).trim();
+            // Decrypt token if it exists
+            if (!token.isEmpty()) {
+                try {
+                    token = decrypt(token);
+                } catch (Exception e) {
+                    // Token might be in plain text (old format or migration)
+                    // Check if it looks like a valid DuckDNS token (UUID format)
+                    if (isValidTokenFormat(token)) {
+                        // It's a plain text token, re-encrypt and save it
+                        Log.i(
+                            "MainActivity",
+                            "Migrating plain text token to encrypted format"
+                        );
+                        String encryptedToken = encrypt(token);
+                        prefs.edit().putString("token", encryptedToken).apply();
+                    } else {
+                        Log.e(
+                            "MainActivity",
+                            "Failed to decrypt token and token format is invalid",
+                            e
+                        );
+                        token = "";
+                    }
+                }
             }
 
             // Populate the EditText fields
@@ -412,15 +410,29 @@ public class MainActivity extends Activity {
     private void saveConfigToFile(String domains, String token, String ip) {
         try {
             String interval = intervalEditText.getText().toString().trim();
-            File configFile = new File(getFilesDir(), CONFIG_FILE);
-            try (FileWriter writer = new FileWriter(configFile)) {
-                writer.write("domains=" + domains + "\n");
-                writer.write("token=" + token + "\n");
-                writer.write("ip=" + ip + "\n");
-                writer.write("interval=" + interval + "\n");
-                writer.flush();
+
+            // Encrypt token before saving
+            String encryptedToken = token;
+            if (!token.isEmpty()) {
+                try {
+                    encryptedToken = encrypt(token);
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Failed to encrypt token", e);
+                }
             }
-        } catch (IOException e) {
+
+            // Save to encrypted SharedPreferences
+            SharedPreferences prefs = getSharedPreferences(
+                "config",
+                Context.MODE_PRIVATE
+            );
+            SharedPreferences.Editor editor = prefs.edit();
+            editor.putString("domains", domains);
+            editor.putString("token", encryptedToken);
+            editor.putString("ip", ip);
+            editor.putString("interval", interval);
+            editor.apply();
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
@@ -678,5 +690,219 @@ public class MainActivity extends Activity {
         if (versionTextView != null) {
             versionTextView.setText("Version: " + version);
         }
+    }
+
+    // Migration from old config file format
+    private boolean migrateFromOldConfigFile() {
+        try {
+            File configFile = new File(getFilesDir(), CONFIG_FILE);
+
+            if (!configFile.exists()) {
+                return false;
+            }
+
+            StringBuilder content = new StringBuilder();
+            try (
+                BufferedReader reader = new BufferedReader(
+                    new FileReader(configFile)
+                )
+            ) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    content.append(line).append("\n");
+                }
+            }
+
+            String configContent = content.toString();
+
+            String domains = "";
+            String token = "";
+            String ip = "";
+            String interval = "";
+
+            // Extract domains
+            int domainsIndex = configContent.indexOf("domains=");
+            if (domainsIndex != -1) {
+                int startIndex = domainsIndex + "domains=".length();
+                int endIndex = configContent.indexOf("\n", startIndex);
+                if (endIndex == -1) endIndex = configContent.length();
+                domains = configContent.substring(startIndex, endIndex).trim();
+            }
+
+            // Extract token
+            int tokenIndex = configContent.indexOf("token=");
+            if (tokenIndex != -1) {
+                int startIndex = tokenIndex + "token=".length();
+                int endIndex = configContent.indexOf("\n", startIndex);
+                if (endIndex == -1) endIndex = configContent.length();
+                token = configContent.substring(startIndex, endIndex).trim();
+            }
+
+            // Extract ip
+            int ipIndex = configContent.indexOf("ip=");
+            if (ipIndex != -1) {
+                int startIndex = ipIndex + "ip=".length();
+                int endIndex = configContent.indexOf("\n", startIndex);
+                if (endIndex == -1) endIndex = configContent.length();
+                ip = configContent.substring(startIndex, endIndex).trim();
+            }
+
+            // Extract interval
+            int intervalIndex = configContent.indexOf("interval=");
+            if (intervalIndex != -1) {
+                int startIndex = intervalIndex + "interval=".length();
+                int endIndex = configContent.indexOf("\n", startIndex);
+                if (endIndex == -1) endIndex = configContent.length();
+                interval = configContent.substring(startIndex, endIndex).trim();
+            }
+
+            // If we found config data, migrate to encrypted SharedPreferences
+            if (!domains.isEmpty() || !token.isEmpty()) {
+                Log.i(
+                    "MainActivity",
+                    "Migrating from old config file to encrypted SharedPreferences"
+                );
+
+                // Encrypt token before saving
+                String encryptedToken = token;
+                if (!token.isEmpty()) {
+                    try {
+                        encryptedToken = encrypt(token);
+                    } catch (Exception e) {
+                        Log.e(
+                            "MainActivity",
+                            "Failed to encrypt token during migration",
+                            e
+                        );
+                    }
+                }
+
+                SharedPreferences prefs = getSharedPreferences(
+                    "config",
+                    Context.MODE_PRIVATE
+                );
+                SharedPreferences.Editor editor = prefs.edit();
+                editor.putString("domains", domains);
+                editor.putString("token", encryptedToken);
+                editor.putString("ip", ip);
+                editor.putString("interval", interval);
+                editor.apply();
+
+                // Delete old config file after successful migration
+                if (configFile.delete()) {
+                    Log.i(
+                        "MainActivity",
+                        "Old config file deleted after migration"
+                    );
+                }
+
+                return true;
+            }
+
+            return false;
+        } catch (Exception e) {
+            Log.e("MainActivity", "Failed to migrate from old config file", e);
+            return false;
+        }
+    }
+
+    // Check if token looks like a valid DuckDNS token (UUID-like format)
+    private boolean isValidTokenFormat(String token) {
+        if (token == null || token.isEmpty()) {
+            return false;
+        }
+        // DuckDNS tokens are UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+        return token.matches(
+            "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
+        );
+    }
+
+    // Encryption helper methods
+    private static final String KEY_ALIAS = "duckdns_key";
+    private static final String ANDROID_KEYSTORE = "AndroidKeyStore";
+    private static final String TRANSFORMATION = "AES/GCM/NoPadding";
+
+    private String encrypt(String plainText) throws Exception {
+        if (plainText == null || plainText.isEmpty()) {
+            return plainText;
+        }
+
+        SecretKey secretKey = getOrCreateSecretKey();
+        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+
+        byte[] encryptedBytes = cipher.doFinal(plainText.getBytes());
+        byte[] iv = cipher.getIV();
+
+        // Combine IV and encrypted data
+        byte[] combined = new byte[iv.length + encryptedBytes.length];
+        System.arraycopy(iv, 0, combined, 0, iv.length);
+        System.arraycopy(
+            encryptedBytes,
+            0,
+            combined,
+            iv.length,
+            encryptedBytes.length
+        );
+
+        return Base64.encodeToString(combined, Base64.NO_WRAP);
+    }
+
+    private String decrypt(String encryptedText) throws Exception {
+        if (encryptedText == null || encryptedText.isEmpty()) {
+            return encryptedText;
+        }
+
+        SecretKey secretKey = getOrCreateSecretKey();
+        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+
+        byte[] combined = Base64.decode(encryptedText, Base64.NO_WRAP);
+        byte[] iv = new byte[12]; // GCM IV is typically 12 bytes
+        byte[] encryptedBytes = new byte[combined.length - 12];
+
+        System.arraycopy(combined, 0, iv, 0, 12);
+        System.arraycopy(
+            combined,
+            12,
+            encryptedBytes,
+            0,
+            encryptedBytes.length
+        );
+
+        GCMParameterSpec gcmSpec = new GCMParameterSpec(128, iv);
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, gcmSpec);
+
+        byte[] decryptedBytes = cipher.doFinal(encryptedBytes);
+        return new String(decryptedBytes);
+    }
+
+    private SecretKey getOrCreateSecretKey() throws Exception {
+        // Try to load existing key from Android KeyStore
+        KeyStore keyStore = KeyStore.getInstance(ANDROID_KEYSTORE);
+        keyStore.load(null);
+
+        if (keyStore.containsAlias(KEY_ALIAS)) {
+            KeyStore.SecretKeyEntry secretKeyEntry =
+                (KeyStore.SecretKeyEntry) keyStore.getEntry(KEY_ALIAS, null);
+            return secretKeyEntry.getSecretKey();
+        }
+
+        // Create new key
+        KeyGenerator keyGenerator = KeyGenerator.getInstance(
+            KeyProperties.KEY_ALGORITHM_AES,
+            ANDROID_KEYSTORE
+        );
+        KeyGenParameterSpec keyGenParameterSpec =
+            new KeyGenParameterSpec.Builder(
+                KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setRandomizedEncryptionRequired(true)
+                .build();
+
+        keyGenerator.init(keyGenParameterSpec);
+        return keyGenerator.generateKey();
     }
 }
