@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.3.0] - 2025-11-30
+
+### Added
+
+- **Encrypted Token Storage**: DuckDNS token is now encrypted using AES-256-GCM with Android Keystore
+- **Hardware-Backed Security**: Encryption keys are stored in Android Keystore (hardware-backed when available)
+- **Automatic Migration**: Existing plain-text configurations are automatically migrated to encrypted storage
+
+### Changed
+
+- **Configuration Storage**: Migrated from plain-text file (`duckdns_config.txt`) to encrypted SharedPreferences
+- **DuckDNSUpdateWorker**: Updated to read configuration from encrypted SharedPreferences instead of plain-text file
+
+### Security
+
+- Token is now encrypted at rest using AES-256-GCM authenticated encryption
+- Encryption keys are protected by Android Keystore system
+- Old plain-text configuration file is automatically deleted after successful migration
+- Token remains protected even if device storage is compromised
+
+### Migration Notes
+
+No user action required. The app will automatically:
+- Detect existing plain-text configuration
+- Encrypt the token and migrate to SharedPreferences
+- Delete the old plain-text configuration file
+- Continue working seamlessly with scheduled updates
+
+---
+
 ## [0.2.0] - 2025-11-30
 
 ### Added

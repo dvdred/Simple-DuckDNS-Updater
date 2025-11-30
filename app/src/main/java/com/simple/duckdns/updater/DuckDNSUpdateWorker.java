@@ -2,6 +2,10 @@ package com.simple.duckdns.updater;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import android.util.Base64;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.work.Data;
@@ -10,14 +14,16 @@ import androidx.work.OneTimeWorkRequest;
 import androidx.work.WorkManager;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.FileWriter;
-import java.io.IOException;
+import java.security.KeyStore;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.TimeUnit;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -296,71 +302,47 @@ public class DuckDNSUpdateWorker extends Worker {
         String[] config = new String[] { "", "", "" }; // domains, token, ip
 
         try {
-            Log.d("DuckDNSUpdateWorker", "Reading config from file");
+            Log.d(
+                "DuckDNSUpdateWorker",
+                "Reading config from SharedPreferences"
+            );
 
-            File configFile = new File(context.getFilesDir(), CONFIG_FILE);
+            SharedPreferences prefs = context.getSharedPreferences(
+                "config",
+                Context.MODE_PRIVATE
+            );
 
-            if (!configFile.exists()) {
+            String domains = prefs.getString("domains", "");
+            String token = prefs.getString("token", "");
+            String ip = prefs.getString("ip", "");
+
+            if (domains.isEmpty() && token.isEmpty()) {
                 writeLog(
                     context,
                     "[" +
                         LocalDateTime.now().format(LOG_DATE_FORMAT) +
-                        "] Config file not found"
+                        "] No configuration found in SharedPreferences"
                 );
-                Log.d("DuckDNSUpdateWorker", "Config file not found");
+                Log.d("DuckDNSUpdateWorker", "No configuration found");
                 return config;
             }
 
-            StringBuilder content = new StringBuilder();
-            try (
-                BufferedReader reader = new BufferedReader(
-                    new FileReader(configFile)
-                )
-            ) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    content.append(line).append("\n");
+            // Decrypt token if it exists
+            if (!token.isEmpty()) {
+                try {
+                    token = decrypt(token);
+                } catch (Exception e) {
+                    Log.e("DuckDNSUpdateWorker", "Failed to decrypt token", e);
+                    // Token might be in plain text format, check if valid
+                    if (!isValidTokenFormat(token)) {
+                        token = "";
+                    }
                 }
             }
 
-            String configContent = content.toString();
-            Log.d(
-                "DuckDNSUpdateWorker",
-                "Config file content: " + configContent
-            );
-
-            // Extract domains
-            int domainsIndex = configContent.indexOf("domains=");
-            if (domainsIndex != -1) {
-                int startIndex = domainsIndex + "domains=".length();
-                int endIndex = configContent.indexOf("\n", startIndex);
-                if (endIndex == -1) endIndex = configContent.length();
-                config[0] = configContent
-                    .substring(startIndex, endIndex)
-                    .trim();
-            }
-
-            // Extract token
-            int tokenIndex = configContent.indexOf("token=");
-            if (tokenIndex != -1) {
-                int startIndex = tokenIndex + "token=".length();
-                int endIndex = configContent.indexOf("\n", startIndex);
-                if (endIndex == -1) endIndex = configContent.length();
-                config[1] = configContent
-                    .substring(startIndex, endIndex)
-                    .trim();
-            }
-
-            // Extract ip
-            int ipIndex = configContent.indexOf("ip=");
-            if (ipIndex != -1) {
-                int startIndex = ipIndex + "ip=".length();
-                int endIndex = configContent.indexOf("\n", startIndex);
-                if (endIndex == -1) endIndex = configContent.length();
-                config[2] = configContent
-                    .substring(startIndex, endIndex)
-                    .trim();
-            }
+            config[0] = domains;
+            config[1] = token;
+            config[2] = ip;
 
             Log.d(
                 "DuckDNSUpdateWorker",
@@ -390,6 +372,80 @@ public class DuckDNSUpdateWorker extends Worker {
         }
 
         return config;
+    }
+
+    // Check if token looks like a valid DuckDNS token (UUID-like format)
+    private boolean isValidTokenFormat(String token) {
+        if (token == null || token.isEmpty()) {
+            return false;
+        }
+        // DuckDNS tokens are UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+        return token.matches(
+            "^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
+        );
+    }
+
+    // Encryption helper methods
+    private static final String KEY_ALIAS = "duckdns_key";
+    private static final String ANDROID_KEYSTORE = "AndroidKeyStore";
+    private static final String TRANSFORMATION = "AES/GCM/NoPadding";
+
+    private String decrypt(String encryptedText) throws Exception {
+        if (encryptedText == null || encryptedText.isEmpty()) {
+            return encryptedText;
+        }
+
+        SecretKey secretKey = getOrCreateSecretKey();
+        Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+
+        byte[] combined = Base64.decode(encryptedText, Base64.NO_WRAP);
+        byte[] iv = new byte[12]; // GCM IV is typically 12 bytes
+        byte[] encryptedBytes = new byte[combined.length - 12];
+
+        System.arraycopy(combined, 0, iv, 0, 12);
+        System.arraycopy(
+            combined,
+            12,
+            encryptedBytes,
+            0,
+            encryptedBytes.length
+        );
+
+        GCMParameterSpec gcmSpec = new GCMParameterSpec(128, iv);
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, gcmSpec);
+
+        byte[] decryptedBytes = cipher.doFinal(encryptedBytes);
+        return new String(decryptedBytes);
+    }
+
+    private SecretKey getOrCreateSecretKey() throws Exception {
+        // Try to load existing key from Android KeyStore
+        KeyStore keyStore = KeyStore.getInstance(ANDROID_KEYSTORE);
+        keyStore.load(null);
+
+        if (keyStore.containsAlias(KEY_ALIAS)) {
+            KeyStore.SecretKeyEntry secretKeyEntry =
+                (KeyStore.SecretKeyEntry) keyStore.getEntry(KEY_ALIAS, null);
+            return secretKeyEntry.getSecretKey();
+        }
+
+        // Create new key
+        KeyGenerator keyGenerator = KeyGenerator.getInstance(
+            KeyProperties.KEY_ALGORITHM_AES,
+            ANDROID_KEYSTORE
+        );
+        KeyGenParameterSpec keyGenParameterSpec =
+            new KeyGenParameterSpec.Builder(
+                KEY_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setRandomizedEncryptionRequired(true)
+                .build();
+
+        keyGenerator.init(keyGenParameterSpec);
+        return keyGenerator.generateKey();
     }
 
     private void writeLog(Context context, String message) {
