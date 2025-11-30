@@ -35,6 +35,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.InetAddress;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -81,6 +82,16 @@ public class MainActivity extends Activity {
     private static final DateTimeFormatter LOG_DATE_FORMAT =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    // DNS servers to check
+    private static final String[] DNS_SERVERS = {
+        "1.1.1.1",
+        "8.8.8.8",
+        "208.67.222.222",
+    };
+
+    // OkHttpClient for quick checks with shorter timeouts
+    private OkHttpClient quickHttpClient;
+
     // BroadcastReceiver per ascoltare gli aggiornamenti del log
     private BroadcastReceiver logUpdateReceiver = new BroadcastReceiver() {
         @Override
@@ -118,6 +129,13 @@ public class MainActivity extends Activity {
 
         // Initialize HTTP client
         httpClient = new OkHttpClient();
+
+        // Initialize quick HTTP client with shorter timeouts for DNS checks
+        quickHttpClient = new OkHttpClient.Builder()
+            .connectTimeout(2, TimeUnit.SECONDS)
+            .readTimeout(2, TimeUnit.SECONDS)
+            .writeTimeout(2, TimeUnit.SECONDS)
+            .build();
 
         // Initialize handler for UI updates
         mainHandler = new Handler(Looper.getMainLooper());
@@ -306,6 +324,24 @@ public class MainActivity extends Activity {
             new Runnable() {
                 @Override
                 public void run() {
+                    // Check if update is needed
+                    if (!shouldPerformUpdate(domains, ip)) {
+                        // DNS already up to date, skip update
+                        mainHandler.post(
+                            new Runnable() {
+                                @Override
+                                public void run() {
+                                    loadLog();
+                                    showSnackbar(
+                                        "Update skipped - DNS already up to date",
+                                        "info"
+                                    );
+                                }
+                            }
+                        );
+                        return;
+                    }
+
                     String result;
                     boolean isSuccess = false;
                     String statusMessage = "";
@@ -405,6 +441,230 @@ public class MainActivity extends Activity {
                 }
             }
         );
+    }
+
+    /**
+     * Check if DuckDNS update should be performed by comparing current/configured IP
+     * with DNS resolution results from multiple DNS servers.
+     *
+     * @param domains Comma-separated list of domains
+     * @param configuredIp IP configured by user (may be empty)
+     * @return true if update should be performed, false if DNS is already up to date
+     */
+    private boolean shouldPerformUpdate(String domains, String configuredIp) {
+        try {
+            String targetIp;
+
+            // Case A: No IP configured - get current public IP
+            if (configuredIp == null || configuredIp.isEmpty()) {
+                Log.d(
+                    "MainActivity",
+                    "No IP configured, getting current public IP"
+                );
+                targetIp = getCurrentPublicIp();
+
+                if (targetIp == null || targetIp.isEmpty()) {
+                    Log.w(
+                        "MainActivity",
+                        "Failed to get public IP, proceeding with update"
+                    );
+                    return true; // If we can't get IP, proceed with update
+                }
+
+                Log.d("MainActivity", "Current public IP: " + targetIp);
+            } else {
+                // Case B: IP is configured
+                targetIp = configuredIp;
+                Log.d("MainActivity", "Using configured IP: " + targetIp);
+            }
+
+            // Split domains and check each one
+            String[] domainList = domains.split(",");
+            for (String domain : domainList) {
+                domain = domain.trim();
+                if (!domain.isEmpty()) {
+                    // Add .duckdns.org if not present
+                    String fullDomain = domain.contains(".")
+                        ? domain
+                        : domain + ".duckdns.org";
+
+                    List<String> dnsResults = resolveDomainOnDnsServers(
+                        fullDomain
+                    );
+
+                    // Count how many DNS servers returned different IP
+                    int mismatchCount = 0;
+                    for (String dnsIp : dnsResults) {
+                        if (dnsIp != null && !dnsIp.equals(targetIp)) {
+                            mismatchCount++;
+                            Log.d(
+                                "MainActivity",
+                                "DNS mismatch for " +
+                                    fullDomain +
+                                    ": got " +
+                                    dnsIp +
+                                    ", expected " +
+                                    targetIp
+                            );
+                        }
+                    }
+
+                    // If 2 or more DNS servers have different IP, update is needed
+                    if (mismatchCount >= 2) {
+                        Log.d(
+                            "MainActivity",
+                            "Update needed: " +
+                                mismatchCount +
+                                " DNS servers have outdated IP for " +
+                                fullDomain
+                        );
+                        return true;
+                    }
+                }
+            }
+
+            // All domains are up to date
+            String timestamp = LocalDateTime.now().format(LOG_DATE_FORMAT);
+            String skipMessage = String.format(
+                "[%s] Manual Update: %s - SKIPPED (DNS already up to date with IP: %s)",
+                timestamp,
+                domains,
+                targetIp
+            );
+            writeLogSync(skipMessage);
+            Log.d("MainActivity", "DNS already up to date, skipping update");
+            return false;
+        } catch (Exception e) {
+            Log.e(
+                "MainActivity",
+                "Error checking if update needed: " + e.getMessage(),
+                e
+            );
+            return true; // On error, proceed with update to be safe
+        }
+    }
+
+    /**
+     * Get current public IP address from v4.ident.me
+     *
+     * @return Public IP address or null if failed
+     */
+    private String getCurrentPublicIp() {
+        try {
+            Request request = new Request.Builder()
+                .url("https://v4.ident.me")
+                .build();
+
+            try (
+                Response response = quickHttpClient.newCall(request).execute()
+            ) {
+                if (response.isSuccessful() && response.body() != null) {
+                    String ip = response.body().string().trim();
+                    Log.d(
+                        "MainActivity",
+                        "Got public IP from v4.ident.me: " + ip
+                    );
+                    return ip;
+                }
+            }
+        } catch (Exception e) {
+            Log.e("MainActivity", "Failed to get public IP: " + e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Resolve domain using multiple DNS servers
+     *
+     * @param domain Domain to resolve (e.g., mydomain.duckdns.org)
+     * @return List of IP addresses resolved by each DNS server (may contain nulls)
+     */
+    private List<String> resolveDomainOnDnsServers(String domain) {
+        List<String> results = new ArrayList<>();
+
+        for (String dnsServer : DNS_SERVERS) {
+            String resolvedIp = resolveDomainWithDns(domain, dnsServer);
+            results.add(resolvedIp);
+
+            if (resolvedIp != null) {
+                Log.d(
+                    "MainActivity",
+                    "DNS " +
+                        dnsServer +
+                        " resolved " +
+                        domain +
+                        " to " +
+                        resolvedIp
+                );
+            } else {
+                Log.d(
+                    "MainActivity",
+                    "DNS " + dnsServer + " failed to resolve " + domain
+                );
+            }
+        }
+
+        return results;
+    }
+
+    /**
+     * Resolve domain using a specific DNS server via DNS-over-HTTPS
+     *
+     * @param domain Domain to resolve
+     * @param dnsServer DNS server IP
+     * @return Resolved IP address or null if failed
+     */
+    private String resolveDomainWithDns(String domain, String dnsServer) {
+        try {
+            String dohUrl = null;
+            if (dnsServer.equals("1.1.1.1")) {
+                dohUrl = "https://1.1.1.1/dns-query?name=" + domain + "&type=A";
+            } else if (dnsServer.equals("8.8.8.8")) {
+                dohUrl = "https://8.8.8.8/resolve?name=" + domain + "&type=A";
+            } else if (dnsServer.equals("208.67.222.222")) {
+                // OpenDNS doesn't have public DoH, fallback to system DNS
+                InetAddress addr = InetAddress.getByName(domain);
+                return addr.getHostAddress();
+            }
+
+            if (dohUrl != null) {
+                Request request = new Request.Builder()
+                    .url(dohUrl)
+                    .addHeader("accept", "application/dns-json")
+                    .build();
+
+                try (
+                    Response response = quickHttpClient
+                        .newCall(request)
+                        .execute()
+                ) {
+                    if (response.isSuccessful() && response.body() != null) {
+                        String body = response.body().string();
+                        // Simple parsing for IP address in JSON response
+                        // Looking for "Answer":[{"data":"x.x.x.x"}]
+                        int dataIndex = body.indexOf("\"data\":\"");
+                        if (dataIndex > 0) {
+                            int startIndex = dataIndex + 8;
+                            int endIndex = body.indexOf("\"", startIndex);
+                            if (endIndex > startIndex) {
+                                return body.substring(startIndex, endIndex);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.d(
+                "MainActivity",
+                "Failed to resolve " +
+                    domain +
+                    " with DNS " +
+                    dnsServer +
+                    ": " +
+                    e.getMessage()
+            );
+        }
+        return null;
     }
 
     private void saveConfigToFile(String domains, String token, String ip) {

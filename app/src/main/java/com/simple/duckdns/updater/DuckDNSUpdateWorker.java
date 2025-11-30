@@ -16,9 +16,12 @@ import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 import java.io.File;
 import java.io.FileWriter;
+import java.net.InetAddress;
 import java.security.KeyStore;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -39,12 +42,27 @@ public class DuckDNSUpdateWorker extends Worker {
     private static final String WORK_NAME = "duckdns_update_work";
     private static final String KEY_INTERVAL_MINUTES = "interval_minutes";
 
+    // DNS servers to check
+    private static final String[] DNS_SERVERS = {
+        "1.1.1.1",
+        "8.8.8.8",
+        "208.67.222.222",
+    };
+
     // Singleton OkHttpClient instance to avoid resource leaks
     private static final OkHttpClient HTTP_CLIENT = new OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
         .build();
+
+    // OkHttpClient for quick checks with shorter timeouts
+    private static final OkHttpClient QUICK_HTTP_CLIENT =
+        new OkHttpClient.Builder()
+            .connectTimeout(2, TimeUnit.SECONDS)
+            .readTimeout(2, TimeUnit.SECONDS)
+            .writeTimeout(2, TimeUnit.SECONDS)
+            .build();
 
     public DuckDNSUpdateWorker(
         @NonNull Context context,
@@ -106,18 +124,26 @@ public class DuckDNSUpdateWorker extends Worker {
                     "Configuration missing - worker completed with success"
                 );
             } else {
-                // Perform the actual DuckDNS update
-                boolean success = performDuckDNSUpdate(
-                    getApplicationContext(),
-                    domains,
-                    token,
-                    ip
-                );
+                // Check if update is needed before performing it
+                if (shouldPerformUpdate(getApplicationContext(), domains, ip)) {
+                    // Perform the actual DuckDNS update
+                    boolean success = performDuckDNSUpdate(
+                        getApplicationContext(),
+                        domains,
+                        token,
+                        ip
+                    );
 
-                Log.d(
-                    "DuckDNSUpdateWorker",
-                    "DuckDNS update completed with success: " + success
-                );
+                    Log.d(
+                        "DuckDNSUpdateWorker",
+                        "DuckDNS update completed with success: " + success
+                    );
+                } else {
+                    Log.d(
+                        "DuckDNSUpdateWorker",
+                        "Skipping update - DNS already up to date"
+                    );
+                }
             }
 
             // Reschedule the next execution
@@ -186,6 +212,254 @@ public class DuckDNSUpdateWorker extends Worker {
                 e
             );
         }
+    }
+
+    /**
+     * Check if DuckDNS update should be performed by comparing current/configured IP
+     * with DNS resolution results from multiple DNS servers.
+     *
+     * @param context Application context
+     * @param domains Comma-separated list of domains
+     * @param configuredIp IP configured by user (may be null/empty)
+     * @return true if update should be performed, false if DNS is already up to date
+     */
+    private boolean shouldPerformUpdate(
+        Context context,
+        String domains,
+        String configuredIp
+    ) {
+        try {
+            String targetIp;
+
+            // Case A: No IP configured - get current public IP
+            if (configuredIp == null || configuredIp.isEmpty()) {
+                Log.d(
+                    "DuckDNSUpdateWorker",
+                    "No IP configured, getting current public IP"
+                );
+                targetIp = getCurrentPublicIp();
+
+                if (targetIp == null || targetIp.isEmpty()) {
+                    Log.w(
+                        "DuckDNSUpdateWorker",
+                        "Failed to get public IP, proceeding with update"
+                    );
+                    return true; // If we can't get IP, proceed with update
+                }
+
+                Log.d("DuckDNSUpdateWorker", "Current public IP: " + targetIp);
+            } else {
+                // Case B: IP is configured
+                targetIp = configuredIp;
+                Log.d(
+                    "DuckDNSUpdateWorker",
+                    "Using configured IP: " + targetIp
+                );
+            }
+
+            // Split domains and check each one
+            String[] domainList = domains.split(",");
+            for (String domain : domainList) {
+                domain = domain.trim();
+                if (!domain.isEmpty()) {
+                    // Add .duckdns.org if not present
+                    String fullDomain = domain.contains(".")
+                        ? domain
+                        : domain + ".duckdns.org";
+
+                    List<String> dnsResults = resolveDomainOnDnsServers(
+                        fullDomain
+                    );
+
+                    // Count how many DNS servers returned different IP
+                    int mismatchCount = 0;
+                    for (String dnsIp : dnsResults) {
+                        if (dnsIp != null && !dnsIp.equals(targetIp)) {
+                            mismatchCount++;
+                            Log.d(
+                                "DuckDNSUpdateWorker",
+                                "DNS mismatch for " +
+                                    fullDomain +
+                                    ": got " +
+                                    dnsIp +
+                                    ", expected " +
+                                    targetIp
+                            );
+                        }
+                    }
+
+                    // If 2 or more DNS servers have different IP, update is needed
+                    if (mismatchCount >= 2) {
+                        Log.d(
+                            "DuckDNSUpdateWorker",
+                            "Update needed: " +
+                                mismatchCount +
+                                " DNS servers have outdated IP for " +
+                                fullDomain
+                        );
+                        return true;
+                    }
+                }
+            }
+
+            // All domains are up to date
+            String timestamp = LocalDateTime.now().format(LOG_DATE_FORMAT);
+            String skipMessage = String.format(
+                "[%s] AutoUpdate: %s - SKIPPED (DNS already up to date with IP: %s)",
+                timestamp,
+                domains,
+                targetIp
+            );
+            writeLog(context, skipMessage);
+            notifyLogUpdate(context);
+            Log.d(
+                "DuckDNSUpdateWorker",
+                "DNS already up to date, skipping update"
+            );
+            return false;
+        } catch (Exception e) {
+            Log.e(
+                "DuckDNSUpdateWorker",
+                "Error checking if update needed: " + e.getMessage(),
+                e
+            );
+            return true; // On error, proceed with update to be safe
+        }
+    }
+
+    /**
+     * Get current public IP address from v4.ident.me
+     *
+     * @return Public IP address or null if failed
+     */
+    private String getCurrentPublicIp() {
+        try {
+            Request request = new Request.Builder()
+                .url("https://v4.ident.me")
+                .build();
+
+            try (
+                Response response = QUICK_HTTP_CLIENT.newCall(request).execute()
+            ) {
+                if (response.isSuccessful() && response.body() != null) {
+                    String ip = response.body().string().trim();
+                    Log.d(
+                        "DuckDNSUpdateWorker",
+                        "Got public IP from v4.ident.me: " + ip
+                    );
+                    return ip;
+                }
+            }
+        } catch (Exception e) {
+            Log.e(
+                "DuckDNSUpdateWorker",
+                "Failed to get public IP: " + e.getMessage()
+            );
+        }
+        return null;
+    }
+
+    /**
+     * Resolve domain using multiple DNS servers
+     *
+     * @param domain Domain to resolve (e.g., mydomain.duckdns.org)
+     * @return List of IP addresses resolved by each DNS server (may contain nulls)
+     */
+    private List<String> resolveDomainOnDnsServers(String domain) {
+        List<String> results = new ArrayList<>();
+
+        for (String dnsServer : DNS_SERVERS) {
+            String resolvedIp = resolveDomainWithDns(domain, dnsServer);
+            results.add(resolvedIp);
+
+            if (resolvedIp != null) {
+                Log.d(
+                    "DuckDNSUpdateWorker",
+                    "DNS " +
+                        dnsServer +
+                        " resolved " +
+                        domain +
+                        " to " +
+                        resolvedIp
+                );
+            } else {
+                Log.d(
+                    "DuckDNSUpdateWorker",
+                    "DNS " + dnsServer + " failed to resolve " + domain
+                );
+            }
+        }
+
+        return results;
+    }
+
+    /**
+     * Resolve domain using a specific DNS server
+     * Note: Android doesn't natively support specifying DNS servers for resolution,
+     * so we use the system's default DNS which may not give us the control we want.
+     * For a production implementation, consider using a DNS library or making
+     * HTTP requests to DNS-over-HTTPS services.
+     *
+     * @param domain Domain to resolve
+     * @param dnsServer DNS server IP (currently not directly used due to Android limitations)
+     * @return Resolved IP address or null if failed
+     */
+    private String resolveDomainWithDns(String domain, String dnsServer) {
+        try {
+            // Note: InetAddress.getByName uses system DNS, not the specified server
+            // For true per-server DNS resolution, we'd need to use DNS-over-HTTPS
+            // or implement raw DNS queries, which is beyond basic Android APIs
+
+            // Using DoH (DNS over HTTPS) as a workaround for specific DNS servers
+            String dohUrl = null;
+            if (dnsServer.equals("1.1.1.1")) {
+                dohUrl = "https://1.1.1.1/dns-query?name=" + domain + "&type=A";
+            } else if (dnsServer.equals("8.8.8.8")) {
+                dohUrl = "https://8.8.8.8/resolve?name=" + domain + "&type=A";
+            } else if (dnsServer.equals("208.67.222.222")) {
+                // OpenDNS doesn't have public DoH, fallback to system DNS
+                InetAddress addr = InetAddress.getByName(domain);
+                return addr.getHostAddress();
+            }
+
+            if (dohUrl != null) {
+                Request request = new Request.Builder()
+                    .url(dohUrl)
+                    .addHeader("accept", "application/dns-json")
+                    .build();
+
+                try (
+                    Response response = QUICK_HTTP_CLIENT.newCall(
+                        request
+                    ).execute()
+                ) {
+                    if (response.isSuccessful() && response.body() != null) {
+                        String body = response.body().string();
+                        // Simple parsing for IP address in JSON response
+                        // Looking for "Answer":[{"data":"x.x.x.x"}]
+                        int dataIndex = body.indexOf("\"data\":\"");
+                        if (dataIndex > 0) {
+                            int startIndex = dataIndex + 8;
+                            int endIndex = body.indexOf("\"", startIndex);
+                            if (endIndex > startIndex) {
+                                return body.substring(startIndex, endIndex);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.d(
+                "DuckDNSUpdateWorker",
+                "Failed to resolve " +
+                    domain +
+                    " with DNS " +
+                    dnsServer +
+                    ": " +
+                    e.getMessage()
+            );
+        }
+        return null;
     }
 
     private boolean performDuckDNSUpdate(

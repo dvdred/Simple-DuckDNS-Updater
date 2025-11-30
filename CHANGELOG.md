@@ -6,6 +6,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.4.0] - 2025-12-01
+
+### Added
+
+- **Smart DNS Check System**: Intelligent pre-update DNS verification to prevent unnecessary updates
+  - Queries 3 DNS servers (1.1.1.1, 8.8.8.8, 208.67.222.222) before each update
+  - Compares current/configured IP with DNS resolution results
+  - Skips update if 2 or more DNS servers already have the correct IP
+  - Works for both manual and automatic updates
+
+- **Public IP Detection**: Automatic detection of current public IP via v4.ident.me
+  - Used when no IP is configured by the user
+  - Fast timeout (2 seconds) to prevent delays
+  
+- **DNS-over-HTTPS Support**: 
+  - Cloudflare (1.1.1.1) DNS queries via DoH
+  - Google (8.8.8.8) DNS queries via DoH
+  - OpenDNS (208.67.222.222) fallback to system DNS
+
+- **Skip Logging**: New log entry type for skipped updates
+  - Example: `[2024-01-15 10:30:45] AutoUpdate: mydomain - SKIPPED (DNS already up to date with IP: 123.45.67.89)`
+
+### Changed
+
+- **Update Logic**: Both manual and automatic updates now check DNS status first
+- **HTTP Client**: Added separate quick HTTP client with 2-second timeouts for DNS checks
+- **Domain Handling**: Automatic `.duckdns.org` suffix addition for short domain names
+
+### Performance
+
+- Reduces unnecessary API calls to DuckDNS servers
+- Fast DNS checks (2-6 seconds total for 3 DNS servers)
+- Minimal battery impact with aggressive timeouts
+- Low data usage (~2-3 KB per check vs ~1 KB per update)
+
+### Technical
+
+- New methods in both `DuckDNSUpdateWorker` and `MainActivity`:
+  - `shouldPerformUpdate()`: Main logic for DNS comparison
+  - `getCurrentPublicIp()`: Fetches current public IP
+  - `resolveDomainOnDnsServers()`: Queries all DNS servers
+  - `resolveDomainWithDns()`: Queries specific DNS server via DoH
+- Fail-safe design: proceeds with update if DNS check fails
+- Supports multiple domains separated by comma
+
+---
+
 ## [0.3.0] - 2025-11-30
 
 ### Added

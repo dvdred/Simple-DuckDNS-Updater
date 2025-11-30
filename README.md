@@ -14,6 +14,10 @@ This Android application allows you to update your DuckDNS domain records progra
 
 - Manual update of DuckDNS records
 - Scheduled updates with customizable intervals (from 1 minute to unlimited)
+- **Smart DNS Check**: Intelligent pre-update verification to prevent unnecessary API calls
+  - Queries 3 DNS servers (Cloudflare, Google, OpenDNS) before each update
+  - Auto-skips update if DNS records are already up to date
+  - Reduces server load and keeps logs clean
 - Input fields for domains, token, and optional IP address
 - Logging of all update activities with HTTP response details
 - Background execution for scheduled updates using WorkManager
@@ -45,9 +49,23 @@ This Android application allows you to update your DuckDNS domain records progra
 ## Implementation Details
 
 The app works by:
-1. Constructing a URL in the format: `https://www.duckdns.org/update?domains={domains}&token={token}&ip={ip}`
-2. Performing real HTTP requests to the DuckDNS API using OkHttp (singleton client with connection pooling)
-3. Logging all activities to a local file including HTTP status codes and response bodies
+1. **Smart DNS Check** (v0.4.0+): Before updating, queries 3 DNS servers to verify if update is needed
+2. Constructing a URL in the format: `https://www.duckdns.org/update?domains={domains}&token={token}&ip={ip}`
+3. Performing real HTTP requests to the DuckDNS API using OkHttp (singleton client with connection pooling)
+4. Logging all activities to a local file including HTTP status codes and response bodies
+
+### Smart DNS Check System
+- Queries Cloudflare (1.1.1.1), Google (8.8.8.8), and OpenDNS (208.67.222.222)
+- Compares results with current/configured IP address
+- Skips update if 2 or more DNS servers already have correct IP
+- Reduces unnecessary API calls and improves efficiency
+- Fast timeouts (2 seconds) to avoid delays
+
+For detailed documentation, see:
+- **[Smart DNS Check README](SMART_DNS_CHECK_README.md)** - User guide and how it works
+- **[DNS Check Implementation](DNS_CHECK_IMPLEMENTATION.md)** - Technical documentation
+- **[Testing Guide](DNS_CHECK_TEST_GUIDE.md)** - Complete testing procedures
+- **[Documentation Index](DNS_CHECK_INDEX.md)** - Navigate all documentation
 4. Using Android's WorkManager with self-rescheduling OneTimeWorkRequest for flexible intervals
 5. Storing configuration securely using encrypted SharedPreferences with Android Keystore
 6. Supporting both manual and automatic update modes
