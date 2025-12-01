@@ -23,6 +23,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import androidx.core.content.ContextCompat;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
@@ -860,8 +861,18 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams params =
             (FrameLayout.LayoutParams) snackbarView.getLayoutParams();
         params.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-        params.topMargin = 50; // Add some top margin
+        params.topMargin = 100; // Add some top margin
         snackbarView.setLayoutParams(params);
+
+        // Set text color to primary_color
+        TextView textView = snackbarView.findViewById(
+            com.google.android.material.R.id.snackbar_text
+        );
+        if (textView != null) {
+            textView.setTextColor(
+                ContextCompat.getColor(this, R.color.secondary_color)
+            );
+        }
 
         switch (type) {
             case "success":
