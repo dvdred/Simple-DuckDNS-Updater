@@ -45,3 +45,7 @@ proguard/
 *.bak
 *.swp
 *~.nib
+
+# Keystore
+*.keystore
+*.jks
