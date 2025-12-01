@@ -1,9 +1,11 @@
-name: Build and Release Android APK
+name: Build and Release DEV Android APK
 
 on:
   push:
-    tags:
-      - "v[0-9]+.*"
+    branches:
+      - "test"
+    paths:
+      - "**"
 
 jobs:
   build:
@@ -17,70 +19,58 @@ jobs:
         with:
           fetch-depth: 0 # 👈 Necessario per accedere alla history dei commit
 
-      - name: Extract version from tag
-        id: extract_version
+      - name: Get commit message
+        id: commit
         run: |
-          # Extract version from tag (removing 'v' prefix if present)
-          TAG_NAME=${{ github.ref_name }}
-          VERSION=${TAG_NAME#v}
-          echo "Version extracted from tag: $VERSION"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          # Get the commit message
+          MESSAGE=$(git log -1 --format=%B)
+          echo "message=$MESSAGE" >> $GITHUB_OUTPUT
 
-      - name: Check version in build.gradle
-        id: check_gradle_version
+      - name: Check if commit message starts with BUILD
+        id: check_build
         run: |
-          # Extract current version from build.gradle
-          CURRENT_VERSION=$(grep -o 'versionName "v[^"]*"' app/build.gradle | sed 's/versionName "\(.*\)"/\1/')
-          echo "Current version in build.gradle: $CURRENT_VERSION"
-
-          # Expected version
-          EXPECTED_VERSION="v${{ steps.extract_version.outputs.version }}"
-          echo "Expected version: $EXPECTED_VERSION"
-
-          # Check if they match
-          if [ "$CURRENT_VERSION" = "$EXPECTED_VERSION" ]; then
-            echo "Version in build.gradle is correct"
-            echo "match=true" >> $GITHUB_OUTPUT
+          MESSAGE="${{ steps.commit.outputs.message }}"
+          if [[ "$MESSAGE" == BUILD* ]]; then
+            echo "build_trigger=true" >> $GITHUB_OUTPUT
           else
-            echo "Version in build.gradle is incorrect"
-            echo "match=false" >> $GITHUB_OUTPUT
+            echo "build_trigger=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Check version in version.txt
-        id: check_txt_version
+      - name: Skip build if not triggered by BUILD commit
+        if: steps.check_build.outputs.build_trigger == 'false'
         run: |
+          echo "Commit message does not start with 'BUILD', skipping build"
+          exit 0
+
+      - name: Check versions
+        id: check_gradle_version
+        if: github.event_name == 'push'
+        run: |
+          # Extract current version from build.gradle
+          GRADLE_VERSION=$(grep -o 'versionName "v[^"]*"' app/build.gradle | sed 's/versionName "\(.*\)"/\1/')
+          echo "Current version in build.gradle: $GRADLE_VERSION"
+
           # Read current version from version.txt
           CURRENT_VERSION=$(cat app/src/main/assets/version.txt)
           echo "Current version in version.txt: $CURRENT_VERSION"
 
-          # Expected version
-          EXPECTED_VERSION="v${{ steps.extract_version.outputs.version }}"
-          echo "Expected version: $EXPECTED_VERSION"
-
           # Check if they match
-          if [ "$CURRENT_VERSION" = "$EXPECTED_VERSION" ]; then
-            echo "Version in version.txt is correct"
+          if [ "$GRADLE_VERSION" = "$CURRENT_VERSION" ]; then
+            echo "Versions are correct"
             echo "match=true" >> $GITHUB_OUTPUT
           else
-            echo "Version in version.txt is incorrect"
+            echo "ERR: Versions are incorrect"
             echo "match=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Validate versions
+        if: github.event_name == 'push' && github.ref_type == 'tag'
         run: |
           GRADLE_MATCH=${{ steps.check_gradle_version.outputs.match }}
-          TXT_MATCH=${{ steps.check_txt_version.outputs.match }}
 
-          if [ "$GRADLE_MATCH" = "false" ] || [ "$TXT_MATCH" = "false" ]; then
+          if [ "$GRADLE_MATCH" = "false" ]; then
             echo "ERROR: Version mismatch detected!"
-            echo "Please update version files to match the tag before pushing:"
-            echo "  Tag version: v${{ steps.extract_version.outputs.version }}"
-            if [ "$GRADLE_MATCH" = "false" ]; then
-              echo "  build.gradle version mismatch"
-            fi
-            if [ "$TXT_MATCH" = "false" ]; then
-              echo "  version.txt version mismatch"
-            fi
+            echo "Please update version files to match the tag before pushing: build.gradle and version.txt"
             exit 1
           else
             echo "All version files are correct. Proceeding with build."
@@ -123,34 +113,3 @@ jobs:
         with:
           name: app-release
           path: app/build/outputs/apk/release/*.apk
-
-      - name: Get commit message
-        id: commit
-        run: |
-          # Prende il messaggio del commit associato al tag
-          MESSAGE=$(git tag -l --format='%(contents)' ${{ github.ref_name }})
-
-          # Se il tag non ha un messaggio, usa il commit message
-          if [ -z "$MESSAGE" ]; then
-            MESSAGE=$(git log -1 --format=%B)
-          fi
-
-          # Salva in output (gestisce messaggi multilinea)
-          echo "message<<EOF" >> $GITHUB_OUTPUT
-          echo "$MESSAGE" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Rename APK files for release
-        run: |
-          # Create renamed copies of the APK files
-          cp app/build/outputs/apk/release/app-release.apk simple-duckdns-updater.apk
-          cp app/build/outputs/apk/debug/app-debug.apk simple-duckdns-updater_debug.apk
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: "🦆 Simple DuckDNS Updater ${{ github.ref_name }}"
-          body: ${{ steps.commit.outputs.message }}
-          files: |
-            simple-duckdns-updater.apk
-            simple-duckdns-updater_debug.apk

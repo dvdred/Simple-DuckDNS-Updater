@@ -23,9 +23,9 @@ The **Smart DNS Check** is an intelligent feature that automatically verifies if
                  ▼
 ┌─────────────────────────────────────────┐
 │  Resolve Domain on 3 DNS Servers        │
-│  • 1.1.1.1 (Cloudflare)                 │
-│  • 8.8.8.8 (Google)                     │
-│  • 208.67.222.222 (OpenDNS)             │
+│  • 1.1.1.1 (Cloudflare, DoH)            │
+│  • 8.8.8.8 (Google, DoH)                │
+│  • 208.67.222.222 (OpenDNS, dns)        │
 └────────────────┬────────────────────────┘
                  │
                  ▼
