@@ -1,4 +1,4 @@
-# Simple-DuckDNS-Updater Android App
+# Simple-DuckDNS-Updater Android App | # Simple-DuckDNS-Updater Android App | [![Build and Release Android APK](https://github.com/dvdred/Simple-DuckDNS-Updater/actions/workflows/android-build.yml/badge.svg?branch=main)](https://github.com/dvdred/Simple-DuckDNS-Updater/actions/workflows/android-build.yml)
 
 ![Logo](https://github.com/dvdred/Simple-DuckDNS-Updater/raw/refs/heads/main/SimpleDuckDNS-Updater.png)
 
