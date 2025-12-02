@@ -157,6 +157,11 @@ jobs:
       # ╔════════════════════════════════════════════════════════════╗
       # ║                      BUILD SETUP                           ║
       # ╚════════════════════════════════════════════════════════════╝
+      - name: Decode Keystore
+        if: steps.check_build.outputs.should_build == 'true'
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $GITHUB_WORKSPACE/release.keystore
+
       - name: Set up JDK 17
         if: steps.check_build.outputs.should_build == 'true'
         uses: actions/setup-java@v4
@@ -198,6 +203,11 @@ jobs:
 
       - name: Build Release APK
         if: steps.check_build.outputs.should_build == 'true'
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease
 
       - name: Upload Release APK
