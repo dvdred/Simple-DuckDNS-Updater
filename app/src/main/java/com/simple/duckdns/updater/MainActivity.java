@@ -8,7 +8,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.security.keystore.KeyGenParameterSpec;
@@ -36,6 +38,8 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.net.InetAddress;
 import java.security.KeyStore;
 import java.security.SecureRandom;
@@ -70,9 +74,13 @@ public class MainActivity extends Activity {
     private TextView configurationToggleIcon;
     private LinearLayout configurationFieldsContainer;
     private TextView versionTextView;
+    private MaterialButton exportConfigButton;
+    private MaterialButton importConfigButton;
     private boolean isConfigurationExpanded = true;
 
     private static final String LOG_FILE = "duckdns_log.txt";
+    private static final int REQUEST_CODE_EXPORT = 1001;
+    private static final int REQUEST_CODE_IMPORT = 1002;
     private static final String CONFIG_FILE = "duckdns_config.txt";
     private static final String LOG_UPDATED_ACTION =
         "com.simple.duckdns.updater.LOG_UPDATED";
@@ -124,6 +132,8 @@ public class MainActivity extends Activity {
             R.id.configurationFieldsContainer
         );
         versionTextView = findViewById(R.id.versionTextView);
+        exportConfigButton = findViewById(R.id.exportConfigButton);
+        importConfigButton = findViewById(R.id.importConfigButton);
 
         // Initialize executor service for background tasks
         executorService = Executors.newFixedThreadPool(2);
@@ -195,6 +205,26 @@ public class MainActivity extends Activity {
                 @Override
                 public void onClick(View v) {
                     toggleConfigurationSection();
+                }
+            }
+        );
+
+        // Export configuration button
+        exportConfigButton.setOnClickListener(
+            new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    exportConfiguration();
+                }
+            }
+        );
+
+        // Import configuration button
+        importConfigButton.setOnClickListener(
+            new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    importConfiguration();
                 }
             }
         );
@@ -305,6 +335,234 @@ public class MainActivity extends Activity {
             configurationToggleIcon.setText("▼");
             isConfigurationExpanded = true;
         }
+    }
+
+    private void exportConfiguration() {
+        String domains = domainsEditText.getText().toString().trim();
+        String token = tokenEditText.getText().toString().trim();
+        String ip = ipEditText.getText().toString().trim();
+        String interval = intervalEditText.getText().toString().trim();
+
+        if (domains.isEmpty() && token.isEmpty()) {
+            showSnackbar("No configuration to export", "error");
+            return;
+        }
+
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("text/csv");
+        intent.putExtra(Intent.EXTRA_TITLE, "duckdns_config.csv");
+        startActivityForResult(intent, REQUEST_CODE_EXPORT);
+    }
+
+    private void importConfiguration() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        String[] mimeTypes = {
+            "text/csv",
+            "text/comma-separated-values",
+            "application/csv",
+            "text/plain",
+        };
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+        startActivityForResult(intent, REQUEST_CODE_IMPORT);
+    }
+
+    @Override
+    protected void onActivityResult(
+        int requestCode,
+        int resultCode,
+        Intent data
+    ) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (resultCode != RESULT_OK || data == null) {
+            return;
+        }
+
+        Uri uri = data.getData();
+        if (uri == null) {
+            return;
+        }
+
+        if (requestCode == REQUEST_CODE_EXPORT) {
+            performExport(uri);
+        } else if (requestCode == REQUEST_CODE_IMPORT) {
+            performImport(uri);
+        }
+    }
+
+    private void performExport(Uri uri) {
+        try {
+            String domains = domainsEditText.getText().toString().trim();
+            String token = tokenEditText.getText().toString().trim();
+            String ip = ipEditText.getText().toString().trim();
+            String interval = intervalEditText.getText().toString().trim();
+
+            OutputStream outputStream = getContentResolver().openOutputStream(
+                uri
+            );
+            if (outputStream == null) {
+                showSnackbar("Failed to open file for writing", "error");
+                return;
+            }
+
+            OutputStreamWriter writer = new OutputStreamWriter(
+                outputStream,
+                "UTF-8"
+            );
+
+            // Write CSV header
+            writer.write("key,value\n");
+
+            // Write values with proper CSV escaping for special characters
+            writer.write("domains," + escapeCsvValue(domains) + "\n");
+            writer.write("token," + escapeCsvValue(token) + "\n");
+            writer.write("ip," + escapeCsvValue(ip) + "\n");
+            writer.write("interval," + escapeCsvValue(interval) + "\n");
+
+            writer.flush();
+            writer.close();
+            outputStream.close();
+
+            showSnackbar("Configuration exported successfully", "success");
+        } catch (Exception e) {
+            Log.e("MainActivity", "Failed to export configuration", e);
+            showSnackbar("Failed to export: " + e.getMessage(), "error");
+        }
+    }
+
+    private void performImport(Uri uri) {
+        try {
+            InputStream inputStream = getContentResolver().openInputStream(uri);
+            if (inputStream == null) {
+                showSnackbar("Failed to open file for reading", "error");
+                return;
+            }
+
+            BufferedReader reader = new BufferedReader(
+                new InputStreamReader(inputStream, "UTF-8")
+            );
+            String line;
+            String domains = "";
+            String token = "";
+            String ip = "";
+            String interval = "";
+
+            boolean isFirstLine = true;
+            while ((line = reader.readLine()) != null) {
+                // Skip header line
+                if (isFirstLine) {
+                    isFirstLine = false;
+                    if (line.toLowerCase().startsWith("key,")) {
+                        continue;
+                    }
+                }
+
+                // Parse CSV line
+                String[] parts = parseCsvLine(line);
+                if (parts.length >= 2) {
+                    String key = parts[0].trim();
+                    String value = parts[1].trim();
+
+                    switch (key.toLowerCase()) {
+                        case "domains":
+                            domains = value;
+                            break;
+                        case "token":
+                            token = value;
+                            break;
+                        case "ip":
+                            ip = value;
+                            break;
+                        case "interval":
+                            interval = value;
+                            break;
+                    }
+                }
+            }
+
+            reader.close();
+            inputStream.close();
+
+            // Update UI with imported values
+            if (!domains.isEmpty()) {
+                domainsEditText.setText(domains);
+            }
+            if (!token.isEmpty()) {
+                tokenEditText.setText(token);
+            }
+            if (!ip.isEmpty()) {
+                ipEditText.setText(ip);
+            }
+            if (!interval.isEmpty()) {
+                intervalEditText.setText(interval);
+            }
+
+            // Save imported configuration
+            saveConfigToFile(domains, token, ip);
+
+            showSnackbar("Configuration imported successfully", "success");
+        } catch (Exception e) {
+            Log.e("MainActivity", "Failed to import configuration", e);
+            showSnackbar("Failed to import: " + e.getMessage(), "error");
+        }
+    }
+
+    private String escapeCsvValue(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
+        // If value contains comma, newline, or double quote, wrap in quotes and escape quotes
+        if (
+            value.contains(",") ||
+            value.contains("\n") ||
+            value.contains("\"") ||
+            value.contains("\r")
+        ) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
+    }
+
+    private String[] parseCsvLine(String line) {
+        List<String> result = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inQuotes = false;
+        boolean hadQuotes = false;
+
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+
+            if (inQuotes) {
+                if (c == '"') {
+                    // Check if it's an escaped quote
+                    if (i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                        current.append('"');
+                        i++; // Skip next quote
+                    } else {
+                        inQuotes = false;
+                    }
+                } else {
+                    current.append(c);
+                }
+            } else {
+                if (c == '"') {
+                    inQuotes = true;
+                    hadQuotes = true;
+                } else if (c == ',') {
+                    result.add(current.toString());
+                    current = new StringBuilder();
+                    hadQuotes = false;
+                } else {
+                    current.append(c);
+                }
+            }
+        }
+        result.add(current.toString());
+
+        return result.toArray(new String[0]);
     }
 
     private void performUpdate() {

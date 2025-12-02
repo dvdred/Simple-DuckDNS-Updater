@@ -242,6 +242,52 @@
 
                     </com.google.android.material.textfield.TextInputLayout>
 
+                    <!-- Export/Import Buttons -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="8dp"
+                    >
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/exportConfigButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="4dp"
+                            android:text="Export"
+                            android:textColor="@color/text_primary"
+                            android:textSize="12sp"
+                            android:fontFamily="monospace"
+                            app:backgroundTint="#455A64"
+                            app:cornerRadius="8dp"
+                            app:icon="@drawable/ic_export"
+                            app:iconGravity="textStart"
+                            app:iconPadding="4dp"
+                            app:iconTint="@color/text_primary"
+                        />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/importConfigButton"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="4dp"
+                            android:text="Import"
+                            android:textColor="@color/text_primary"
+                            android:textSize="12sp"
+                            android:fontFamily="monospace"
+                            app:backgroundTint="#455A64"
+                            app:cornerRadius="8dp"
+                            app:icon="@drawable/ic_import"
+                            app:iconGravity="textStart"
+                            app:iconPadding="4dp"
+                            app:iconTint="@color/text_primary"
+                        />
+
+                    </LinearLayout>
+
                 </LinearLayout>
 
             </LinearLayout>
