@@ -28,6 +28,9 @@ This Android application allows you to update your DuckDNS domain records progra
 - Responsive UI with collapsible configuration section
 - Real-time log viewing and clearing functionality
 - Survives app restarts and device reboots
+- **Export/Import Configuration**: Backup and restore settings via CSV files
+  - Export configuration to CSV with proper escaping for special characters (tokens)
+  - Import configuration from CSV with support for quoted values
 
 ## How to Use
 
@@ -162,11 +165,10 @@ This implementation now includes:
 - [ ] Implement exponential backoff for failed requests
 - [ ] Add network constraints (WiFi only option)
 - [ ] Add battery constraints (skip updates when battery is low)
-- [ ] Implement adaptive intervals based on IP change detection
 - [ ] Add support for multiple DuckDNS accounts
 - [ ] Implement push notifications for update results
 - [ ] Add widget for quick status view
-- [ ] Export/import configuration
+- [x] ~~Export/import configuration~~ (Added in v0.4.1)
 
 ## Documentation
 
